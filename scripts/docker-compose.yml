@@ -1,0 +1,15 @@
+version: '2.4'
+
+services:
+  pg:
+    image: postgres:11-alpine
+    ports:
+      - "55432:5432"
+    volumes:
+      - pg11-istravayou:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=testingOnLocal1234
+      - POSTGRES_USER=istravayou
+
+volumes:
+  pg11-istravayou:
