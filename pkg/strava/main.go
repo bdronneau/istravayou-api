@@ -12,7 +12,7 @@ import (
 	"github.com/labstack/echo/middleware"
 	"github.com/sirupsen/logrus"
 
-	stravaSDK "github.com/strava/go.strava"
+	stravaSDK "github.com/bdronneau/go.strava"
 )
 
 // App of package
@@ -101,14 +101,14 @@ func (a app) NewHTTP(env string) {
 
 	e.Use(middlewareLogger())
 
+	// TODO delete me
 	// Routes for internal testing
 	if env == "dev" {
 		e.GET("/private/login", a.handleLogin)
-		e.GET("/private/exchange_token", echo.WrapHandler(a.authenticator.HandlerFunc(oAuthSuccess, oAuthFailure)))
+		e.GET("/private/exchange_token", echo.WrapHandler(a.authenticator.HandlerFunc(handleoAuthSuccess, handleoAuthFailure)))
 		e.GET("/private/info", a.handleInfo)
 	}
 
-	// Main
 	// TODO: ofc improve this
 	e.GET("/health", func(c echo.Context) error {
 		return c.String(http.StatusOK, "It's okay, but not tested!")

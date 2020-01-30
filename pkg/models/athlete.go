@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"time"
 
+	strava "github.com/bdronneau/go.strava"
 	"github.com/sirupsen/logrus"
-	strava "github.com/strava/go.strava"
 )
 
 // Athlete is the representation of an athlete
@@ -22,11 +22,11 @@ type Athlete struct {
 
 // GetAthleteByCode retrieve athlete detail
 func GetAthleteByCode(code string) (*Athlete, error) {
-	row := db.QueryRow("SELECT id, code FROM athletes WHERE code=$1", code)
+	row := db.QueryRow("SELECT id, code, access_token, refresh_token FROM athletes WHERE code=$1", code)
 
 	athlete := &Athlete{}
 
-	err := row.Scan(&athlete.ID, &athlete.Code)
+	err := row.Scan(&athlete.ID, &athlete.Code, &athlete.AccessToken, &athlete.RefreshToken)
 
 	if err == sql.ErrNoRows {
 		logrus.WithFields(logrus.Fields{
@@ -63,8 +63,8 @@ func GetAthleteByStravaID(id int64) (*Athlete, error) {
 // InsertAthlete insert new athlete
 func InsertAthlete(athlete *strava.AuthorizationResponse, code string) (*Athlete, error) {
 	sqlStatement := `
-		INSERT INTO athletes (strava_id, name, code, access_token, lastupdated)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO athletes (strava_id, name, code, access_token, refresh_token, lastupdated)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, strava_id`
 
 	athleteDB := &Athlete{}
@@ -75,6 +75,7 @@ func InsertAthlete(athlete *strava.AuthorizationResponse, code string) (*Athlete
 		athlete.Athlete.AthleteSummary.FirstName,
 		code,
 		athlete.AccessToken,
+		athlete.RefreshToken,
 		timeUpdated).Scan(
 		&athleteDB.ID,
 		&athleteDB.StravaID)
@@ -97,7 +98,7 @@ func UpdateAthleteCode(athlete *Athlete) (*Athlete, error) {
 
 	sqlStatement := `
 		UPDATE athletes
-		SET code = $3, lastupdated = $2
+		SET code = $3, lastupdated = $2, access_token = $4, refresh_token = $5
 		WHERE id = $1
 		RETURNING id, code`
 
@@ -107,7 +108,9 @@ func UpdateAthleteCode(athlete *Athlete) (*Athlete, error) {
 		sqlStatement,
 		athlete.ID,
 		timeUpdated,
-		athlete.Code).Scan(
+		athlete.Code,
+		athlete.AccessToken,
+		athlete.RefreshToken).Scan(
 		&athleteDB.ID,
 		&athleteDB.Code)
 

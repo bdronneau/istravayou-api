@@ -6,59 +6,32 @@ import (
 	"fmt"
 	"net/http"
 
+	stravaSDK "github.com/bdronneau/go.strava"
 	"github.com/bdronneau/istravayou/pkg/models"
 	"github.com/labstack/echo"
 	"github.com/sirupsen/logrus"
-	stravaSDK "github.com/strava/go.strava"
 )
 
-func (a app) handleLogin(c echo.Context) error {
-	toClick := fmt.Sprintf(`<a href="%s">Click Me</a>`, a.authenticator.AuthorizationURL("state1", "activity:read", true))
-
-	return c.HTML(http.StatusOK, "Login! "+toClick)
-}
-
-func (a app) handleOAuth(c echo.Context) error {
-	if c.Request().FormValue("error") == "access_denied" {
-		return c.String(http.StatusUnauthorized, "No access for Login page!")
-	}
-
-	t := new(tokenURL)
-	if err := c.Bind(t); err != nil {
-		return c.String(400, "Nope 400")
-	}
-
-	return c.Redirect(302, "/private/info")
-}
-
-func (a app) handleInfo(c echo.Context) error {
-	return c.String(http.StatusOK, "OK")
-}
-
-func (a app) getAccessToken(code string) (*stravaSDK.AuthorizationResponse, error) {
-	client := http.DefaultClient
-
-	data, err := a.authenticator.Authorize(code, client)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
 func (a app) handleAthlete(c echo.Context) error {
+	contextLogger := logrus.WithFields(logrus.Fields{
+		"route": "handleHeadAthlete",
+	})
+
 	code := c.Request().Header.Get("X-Athlete-Code")
 
-	logrus.Debug(code)
 	// TODO: handle better for validation and use common function
 	if code == "" || code == "undefined" {
 		return c.JSON(400, "No Header X-Athlete-Code")
 	}
 
+	contextLogger.Debugf("Code: %s", code)
+
 	data, err := a.getAccessToken(code)
 
+	contextLogger.Debugf("Data athlete %v", data)
+
 	if err != nil {
-		logrus.Errorf("handleAthlete %v", err)
+		contextLogger.Errorf("handleAthlete %v", err)
 		return c.JSON(401, "Check logs")
 	}
 
@@ -72,11 +45,79 @@ func (a app) handleAthlete(c echo.Context) error {
 	}
 
 	return c.JSON(200, athlete)
+}
 
+func (a app) handleHeadAthlete(c echo.Context) error {
+	contextLogger := logrus.WithFields(logrus.Fields{
+		"route": "handleHeadAthlete",
+	})
+
+	code := c.Request().Header.Get("X-Athlete-Code")
+
+	// TODO: handle better for validation and use common function
+	if code == "" || code == "undefined" {
+		return c.JSON(400, "No Header X-Athlete-Code")
+	}
+
+	_, err := a.checkCodeExist(code)
+
+	if err != nil {
+		contextLogger.Errorf("%v", err)
+		return c.JSON(401, "Check logs")
+	}
+
+	return c.JSON(200, nil)
+}
+
+func (a app) handleAuth(c echo.Context) error {
+	contextLogger := logrus.WithFields(logrus.Fields{
+		"route": "handleAuth",
+	})
+	code := c.Request().Header.Get("X-Athlete-Code")
+
+	// TODO: handle better for validation
+	if code == "" || code == "undefined" {
+		return c.JSON(400, "No Header X-Athlete-Code")
+	}
+
+	client := http.DefaultClient
+	auth, err := a.authenticator.Authorize(code, client)
+
+	if err != nil {
+		logrus.Errorf("%v", err)
+		return c.JSON(400, "Check logs")
+	}
+
+	athlete, err := models.GetAthleteByStravaID(auth.Athlete.Id)
+
+	if err == sql.ErrNoRows {
+		// TODO: format as models.Athlete
+		contextLogger.Debugf("auth information %v", auth)
+		athlete, err := models.InsertAthlete(auth, code)
+
+		if err != nil {
+			contextLogger.Errorf("%v", err)
+			return c.JSON(500, "Check logs")
+		}
+
+		return c.JSON(201, athlete)
+	} else if err != nil {
+		contextLogger.Errorf("%v", err)
+		return c.JSON(401, "Check logs")
+	}
+
+	athlete.Code = code
+	athlete.RefreshToken = auth.RefreshToken
+	athlete.AccessToken = auth.AccessToken
+
+	// TODO: Handle error
+	_, _ = models.UpdateAthleteCode(athlete)
+
+	return c.JSON(200, nil)
 }
 
 // TODO: do not keep this
-func oAuthSuccess(auth *stravaSDK.AuthorizationResponse, w http.ResponseWriter, r *http.Request) {
+func handleoAuthSuccess(auth *stravaSDK.AuthorizationResponse, w http.ResponseWriter, r *http.Request) {
 	logrus.Debugf("SUCCESS:\nAt this point you can use this information to create a new user or link the account to one of your existing users\n")
 	logrus.Debugf("State: %s\n\n", auth.State)
 	logrus.Debugf("Access Token: %s\n\n", auth.AccessToken)
@@ -87,7 +128,7 @@ func oAuthSuccess(auth *stravaSDK.AuthorizationResponse, w http.ResponseWriter, 
 }
 
 // TODO: do not keep this
-func oAuthFailure(err error, w http.ResponseWriter, r *http.Request) {
+func handleoAuthFailure(err error, w http.ResponseWriter, r *http.Request) {
 	logrus.Debugf("Authorization Failure:\n")
 
 	// some standard error checking
@@ -107,70 +148,14 @@ func oAuthFailure(err error, w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprint(w, "Check logs")
 }
 
-func (a app) handleHeadAthlete(c echo.Context) error {
-	code := c.Request().Header.Get("X-Athlete-Code")
-
-	// TODO: handle better for validation and use common function
-	if code == "" || code == "undefined" {
-		return c.JSON(400, "No Header X-Athlete-Code")
-	}
-
-	_, err := a.checkCodeExist(code)
-
-	if err != nil {
-		logrus.Errorf("handleHeadAthlete %v", err)
-		return c.JSON(401, "Check logs")
-	}
-
-	return c.JSON(200, nil)
+// TODO: do not keep this
+func (a app) handleInfo(c echo.Context) error {
+	return c.String(http.StatusOK, "OK")
 }
 
-func (a app) handleAuth(c echo.Context) error {
-	code := c.Request().Header.Get("X-Athlete-Code")
+// TODO: do not keep this
+func (a app) handleLogin(c echo.Context) error {
+	toClick := fmt.Sprintf(`<a href="%s">Click Me</a>`, a.authenticator.AuthorizationURL("state1", "activity:read", true))
 
-	// TODO: handle better for validation
-	if code == "" || code == "undefined" {
-		return c.JSON(400, "No Header X-Athlete-Code")
-	}
-
-	auth, err := a.getAccessToken(code)
-
-	if err != nil {
-		logrus.Errorf("handleAuth %v", err)
-		return c.JSON(400, "Check logs")
-	}
-
-	athlete, err := models.GetAthleteByStravaID(auth.Athlete.Id)
-
-	if err == sql.ErrNoRows {
-		// TODO: format as models.Athlete
-		athlete, err := models.InsertAthlete(auth, code)
-
-		if err != nil {
-			logrus.Errorf("handleAuth %v", err)
-			return c.JSON(500, "Check logs")
-		}
-
-		return c.JSON(201, athlete)
-	} else if err != nil {
-		logrus.Errorf("handleAuth %v", err)
-		return c.JSON(401, "Check logs")
-	}
-
-	athlete.Code = code
-
-	// TODO: Handle error
-	_, _ = models.UpdateAthleteCode(athlete)
-
-	return c.JSON(200, nil)
-}
-
-func (a app) checkCodeExist(code string) (*models.Athlete, error) {
-	athlete, err := models.GetAthleteByCode(code)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return athlete, nil
+	return c.HTML(http.StatusOK, "Login! "+toClick)
 }
