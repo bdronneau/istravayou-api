@@ -1,5 +1,10 @@
 SHELL = /bin/sh
 
+ifneq ("$(wildcard .dev)","")
+	include .dev
+	export
+endif
+
 APP_NAME ?= istravayou-api
 PACKAGES ?= ./...
 GO_FILES ?= */*/*.go
@@ -63,10 +68,12 @@ lint:
 build:
 	CGO_ENABLED=0 go build -ldflags="-s -w" -installsuffix nocgo -o $(BINARY_PATH) $(LIB_SOURCE)
 
-# clean: Delete binary
+## clean: Delete binary
 .PHONY: clean
 clean:
 	rm $(BINARY_PATH)_$(VERSION)
 
-.PHONY: all
-all: build install
+## run: Start app
+.PHONY: run
+run:
+	go run cmd/istravayou/main.go
