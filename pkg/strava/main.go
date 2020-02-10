@@ -119,9 +119,9 @@ func (a app) NewHTTP(env string) {
 	})
 
 	// Routes for Front
-	e.GET("/api/athlete", a.handleAthlete)
-	e.HEAD("/api/athlete", a.handleHeadAthlete)
-	e.POST("/api/auth", a.handleAuth)
+	g.GET("/athlete", a.handleAthlete)
+	g.HEAD("/athlete", a.handleHeadAthlete)
+	g.POST("/auth", a.handleAuth)
 
 	e.Logger.Fatal(e.Start(fmt.Sprintf(":%d", a.httpPort)))
 }
