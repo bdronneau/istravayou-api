@@ -19,11 +19,6 @@ func (a app) handleAthlete(c echo.Context) error {
 
 	code := c.Request().Header.Get("X-Athlete-Code")
 
-	// TODO: handle better for validation and use common function
-	if code == "" || code == "undefined" {
-		return c.JSON(400, "No Header X-Athlete-Code")
-	}
-
 	contextLogger.Debugf("Code: %s", code)
 
 	data, err := a.getAccessToken(code)
@@ -54,11 +49,6 @@ func (a app) handleHeadAthlete(c echo.Context) error {
 
 	code := c.Request().Header.Get("X-Athlete-Code")
 
-	// TODO: handle better for validation and use common function
-	if code == "" || code == "undefined" {
-		return c.JSON(400, "No Header X-Athlete-Code")
-	}
-
 	_, err := a.checkCodeExist(code)
 
 	if err != nil {
@@ -73,12 +63,8 @@ func (a app) handleAuth(c echo.Context) error {
 	contextLogger := logrus.WithFields(logrus.Fields{
 		"route": "handleAuth",
 	})
-	code := c.Request().Header.Get("X-Athlete-Code")
 
-	// TODO: handle better for validation
-	if code == "" || code == "undefined" {
-		return c.JSON(400, "No Header X-Athlete-Code")
-	}
+	code := c.Request().Header.Get("X-Athlete-Code")
 
 	client := http.DefaultClient
 	auth, err := a.authenticator.Authorize(code, client)

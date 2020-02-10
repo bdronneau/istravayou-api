@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bdronneau/istravayou/pkg/models"
+	"github.com/bdronneau/istravayou/pkg/utils"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/sirupsen/logrus"
@@ -99,7 +100,10 @@ func (a app) NewHTTP(env string) {
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodDelete},
 	}))
 
+	g := e.Group("/api")
+
 	e.Use(middlewareLogger())
+	g.Use(middlewareHeaders)
 
 	// TODO delete me
 	// Routes for internal testing
@@ -161,5 +165,16 @@ func middlewareLogger() echo.MiddlewareFunc {
 			)
 			return err
 		}
+	}
+}
+
+func middlewareHeaders(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		_, err := utils.GetHeaderValue(c.Request().Header, "X-Athlete-Code")
+
+		if err != nil {
+			return c.JSON(400, "X-Athlete-Code is invalid")
+		}
+		return next(c)
 	}
 }
